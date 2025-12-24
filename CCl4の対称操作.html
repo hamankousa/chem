@@ -312,15 +312,21 @@
     scene.add(c3Group);
     c3AxesData.forEach((ax) => {
       const color = 0xffffff;
-      const len = 4.0;
-      const lineGeom = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0,0,0), 
+      const len = 5.0;
+      
+      // 矢印ヘルパーを使って軸を明確化（双方向）
+      const a1 = new THREE.ArrowHelper(ax.dir, new THREE.Vector3(0,0,0), len, color, 0.4, 0.25);
+      const a2 = new THREE.ArrowHelper(ax.dir.clone().negate(), new THREE.Vector3(0,0,0), len, color, 0.4, 0.25);
+      c3Group.add(a1, a2);
+
+      // 実線で軸を描画
+      const pts = [
+        ax.dir.clone().multiplyScalar(-len), 
         ax.dir.clone().multiplyScalar(len)
-      ]);
-      const lineMat = new THREE.LineDashedMaterial({ color, dashSize: 0.2, gapSize: 0.1, opacity: 0.4, transparent: true });
-      const line = new THREE.Line(lineGeom, lineMat);
-      line.computeLineDistances();
-      c3Group.add(line);
+      ];
+      const lineGeom = new THREE.BufferGeometry().setFromPoints(pts);
+      const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6 });
+      c3Group.add(new THREE.Line(lineGeom, lineMat));
     });
 
     // Sigma Planes Visuals
