@@ -1,0 +1,426 @@
+﻿<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CCl4 (Td) — 対称操作の可視化</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #0b0f17; color: #e8eefc; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; }
+    #app { position: fixed; inset: 0; }
+    .hud {
+      position: fixed; top: 12px; left: 12px;
+      background: rgba(20, 28, 45, 0.75);
+      border: 1px solid rgba(232, 238, 252, 0.15);
+      border-radius: 12px;
+      padding: 12px;
+      width: min(520px, calc(100vw - 24px));
+      backdrop-filter: blur(8px);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+      line-height: 1.35;
+    }
+    .hud h1 { font-size: 14px; margin: 0 0 8px; font-weight: 650; }
+    .hud p { margin: 6px 0; font-size: 12.5px; opacity: 0.95; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+    select, button, label { font-size: 12.5px; border-radius: 10px; }
+    select {
+      padding: 8px 10px;
+      border: 1px solid rgba(232, 238, 252, 0.18);
+      background: rgba(255,255,255,0.06);
+      color: #e8eefc;
+      outline: none;
+    }
+    button {
+      padding: 8px 10px;
+      border: 1px solid rgba(232, 238, 252, 0.18);
+      background: rgba(255,255,255,0.08);
+      color: #e8eefc;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    label {
+      display: inline-flex; gap: 8px; align-items: center;
+      padding: 8px 10px;
+      border: 1px solid rgba(232, 238, 252, 0.18);
+      background: rgba(255,255,255,0.06);
+      user-select: none;
+    }
+    input[type="checkbox"] { transform: translateY(0.5px); }
+    .note {
+      margin-top: 10px;
+      font-size: 12px;
+      opacity: 0.9;
+      border-top: 1px solid rgba(232, 238, 252, 0.12);
+      padding-top: 8px;
+    }
+    .warn { margin-top: 8px; font-size: 12px; opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div class="hud">
+    <h1>CCl₄（正四面体, 点群 T<sub>d</sub>）— 対称操作の可視化</h1>
+    <p>
+      点群 T<sub>d</sub> の対称要素: E, C<sub>3</sub>, C<sub>2</sub>, S<sub>4</sub>, σ<sub>d</sub> を確認できます。
+    </p>
+
+    <div class="row">
+      <select id="opTypeSelect">
+        <option value="C3">C3 (120°回転)</option>
+        <option value="C2">C2 (180°回転)</option>
+        <option value="S4">S4 (90°回転 + 鏡映)</option>
+        <option value="sigma">σd (鏡映)</option>
+        <option value="E">E (恒等操作)</option>
+      </select>
+      
+      <select id="axisSelect"></select>
+
+      <button id="applyBtn">適用</button>
+      <button id="resetBtn">リセット</button>
+    </div>
+    
+    <div class="row">
+      <label><input type="checkbox" id="toggleC3" />C3軸</label>
+      <label><input type="checkbox" id="toggleC2S4" checked />C2/S4軸</label>
+      <label><input type="checkbox" id="togglePlanes" />鏡映面(σd)</label>
+      <label><input type="checkbox" id="toggleBonds" checked />結合</label>
+    </div>
+
+    <div class="note">
+      操作: 左ドラッグ＝回転、右ドラッグ＝平行移動、ホイール＝ズーム。Rキー＝リセット。
+    </div>
+    <div class="warn" id="status"></div>
+  </div>
+
+  <!-- Import Map を追加: 'three' という名前を実際の URL に紐付けます -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    const statusEl = document.getElementById("status");
+
+    // Import Map を利用して読み込むように変更
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    // --- Three.js basic setup ---
+    const container = document.getElementById("app");
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x0b0f17, 6, 18);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
+    camera.position.set(4.2, 3.1, 5.4);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 0, 0);
+
+    // --- Lights ---
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const key = new THREE.DirectionalLight(0xffffff, 1.05);
+    key.position.set(4, 6, 3);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.55);
+    rim.position.set(-6, 2, -4);
+    scene.add(rim);
+
+    // --- Regular tetrahedron (CCl4) centered at origin ---
+    const scale = 1.75;
+    const V0 = [
+      new THREE.Vector3( 1,  1,  1).multiplyScalar(scale),
+      new THREE.Vector3( 1, -1, -1).multiplyScalar(scale),
+      new THREE.Vector3(-1,  1, -1).multiplyScalar(scale),
+      new THREE.Vector3(-1, -1,  1).multiplyScalar(scale),
+    ];
+
+    const matC  = new THREE.MeshStandardMaterial({ color: 0x8892a6, roughness: 0.35, metalness: 0.15 });
+    const matCl = new THREE.MeshStandardMaterial({ color: 0x3fd27c, roughness: 0.25, metalness: 0.05 });
+
+    const carbon = new THREE.Mesh(new THREE.SphereGeometry(0.30, 32, 24), matC);
+    carbon.position.set(0, 0, 0);
+    scene.add(carbon);
+
+    const chlorines = V0.map((pos) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.38, 32, 24), matCl);
+      m.position.copy(pos);
+      scene.add(m);
+      return m;
+    });
+
+    // Bonds (C—Cl)
+    const bondsGroup = new THREE.Group();
+    scene.add(bondsGroup);
+
+    function makeBond(p0, p1) {
+      const dir = new THREE.Vector3().subVectors(p1, p0);
+      const len = dir.length();
+      const geom = new THREE.CylinderGeometry(0.06, 0.06, len, 18, 1, true);
+      const mat = new THREE.MeshStandardMaterial({ color: 0xc7d2f0, roughness: 0.65, metalness: 0.0, transparent: true, opacity: 0.9 });
+      const mesh = new THREE.Mesh(geom, mat);
+
+      const mid = new THREE.Vector3().addVectors(p0, p1).multiplyScalar(0.5);
+      mesh.position.copy(mid);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+      return mesh;
+    }
+
+    let bonds = [];
+    function updateBonds() {
+      bonds.forEach(b => bondsGroup.remove(b));
+      bonds = chlorines.map(cl => {
+        const b = makeBond(carbon.position, cl.position);
+        bondsGroup.add(b);
+        return b;
+      });
+    }
+    updateBonds();
+
+    // --- Symmetry Elements Data ---
+    
+    // 1. C2 / S4 Axes (Cartesian axes for this orientation)
+    // Pairs: (0-1)<->(2-3) -> X axis
+    // Pairs: (0-2)<->(1-3) -> Y axis
+    // Pairs: (0-3)<->(1-2) -> Z axis
+    const c2s4AxesData = [
+      { dir: new THREE.Vector3(1, 0, 0), name: "X軸 (辺0-1, 2-3の中点)" },
+      { dir: new THREE.Vector3(0, 1, 0), name: "Y軸 (辺0-2, 1-3の中点)" },
+      { dir: new THREE.Vector3(0, 0, 1), name: "Z軸 (辺0-3, 1-2の中点)" }
+    ];
+
+    // 2. C3 Axes (Along C-Cl bonds)
+    const c3AxesData = V0.map((v, i) => ({
+      dir: v.clone().normalize(),
+      name: `Cl-${i+1} 方向`
+    }));
+
+    // 3. Sigma_d Planes (Containing C and 2 Cl atoms)
+    // Normal vector is cross product of two Cl positions
+    const sigmaPlanesData = [];
+    const pairs = [[0,1], [0,2], [0,3], [1,2], [1,3], [2,3]];
+    pairs.forEach(([i, j], idx) => {
+      const n = new THREE.Vector3().crossVectors(V0[i], V0[j]).normalize();
+      sigmaPlanesData.push({
+        normal: n,
+        name: `面 Cl${i+1}-C-Cl${j+1}`,
+        u: V0[i].clone().normalize(), // for visualization orientation
+        v: V0[j].clone().normalize()
+      });
+    });
+
+    // --- Visual Helpers ---
+    
+    // C2/S4 Visuals
+    const c2s4Group = new THREE.Group();
+    scene.add(c2s4Group);
+    const axisLength = 5.0;
+    c2s4AxesData.forEach((ax, k) => {
+      const color = [0xff6b6b, 0x6bc3ff, 0xffd36b][k];
+      const a1 = new THREE.ArrowHelper(ax.dir, new THREE.Vector3(0,0,0), axisLength, color, 0.35, 0.18);
+      const a2 = new THREE.ArrowHelper(ax.dir.clone().negate(), new THREE.Vector3(0,0,0), axisLength, color, 0.35, 0.18);
+      c2s4Group.add(a1, a2);
+      
+      // Dashed line
+      const pts = [ax.dir.clone().multiplyScalar(-axisLength), ax.dir.clone().multiplyScalar(axisLength)];
+      const lineGeom = new THREE.BufferGeometry().setFromPoints(pts);
+      const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.5 });
+      c2s4Group.add(new THREE.Line(lineGeom, lineMat));
+    });
+
+    // C3 Visuals
+    const c3Group = new THREE.Group();
+    c3Group.visible = false;
+    scene.add(c3Group);
+    c3AxesData.forEach((ax) => {
+      const color = 0xffffff;
+      const len = 4.0;
+      const lineGeom = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0,0,0), 
+        ax.dir.clone().multiplyScalar(len)
+      ]);
+      const lineMat = new THREE.LineDashedMaterial({ color, dashSize: 0.2, gapSize: 0.1, opacity: 0.4, transparent: true });
+      const line = new THREE.Line(lineGeom, lineMat);
+      line.computeLineDistances();
+      c3Group.add(line);
+    });
+
+    // Sigma Planes Visuals
+    const planesGroup = new THREE.Group();
+    planesGroup.visible = false;
+    scene.add(planesGroup);
+    const planeGeom = new THREE.CircleGeometry(3.5, 32);
+    sigmaPlanesData.forEach((pd) => {
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.1, depthWrite: false });
+      const mesh = new THREE.Mesh(planeGeom, mat);
+      mesh.lookAt(pd.normal);
+      planesGroup.add(mesh);
+    });
+
+    // --- Animation Logic ---
+    let isAnimating = false;
+
+    function lerpVector(v1, v2, t) {
+      return new THREE.Vector3().lerpVectors(v1, v2, t);
+    }
+
+    // Generic transform function
+    // type: 'C3', 'C2', 'S4', 'sigma', 'E'
+    // param: index in the respective data array
+    // t: 0 to 1
+    function getTransformedPos(p, type, param, t) {
+      if (type === 'E') return p.clone();
+
+      if (type === 'C3') {
+        const axis = c3AxesData[param].dir;
+        const angle = (2 * Math.PI / 3) * t;
+        return p.clone().applyAxisAngle(axis, angle);
+      }
+      
+      if (type === 'C2') {
+        const axis = c2s4AxesData[param].dir;
+        const angle = Math.PI * t;
+        return p.clone().applyAxisAngle(axis, angle);
+      }
+
+      if (type === 'S4') {
+        const axis = c2s4AxesData[param].dir;
+        const angle = (Math.PI / 2) * t;
+        const s = 1 - 2 * t; // Reflection part: scale along axis from 1 to -1
+        
+        // Rotate first
+        const pRot = p.clone().applyAxisAngle(axis, angle);
+        // Then reflect (project onto axis, invert component parallel to axis)
+        const dot = pRot.dot(axis);
+        const pPar = axis.clone().multiplyScalar(dot);
+        const pPerp = pRot.clone().sub(pPar);
+        // pPar goes from +val to -val
+        return pPerp.add(pPar.multiplyScalar(s));
+      }
+
+      if (type === 'sigma') {
+        const normal = sigmaPlanesData[param].normal;
+        // Reflection: P' = P - 2(P.n)n
+        // We interpolate from P to P'
+        const dot = p.dot(normal);
+        const pReflected = p.clone().sub(normal.clone().multiplyScalar(2 * dot));
+        return lerpVector(p, pReflected, t);
+      }
+      
+      return p.clone();
+    }
+
+    function runAnimation(type, param) {
+      if (isAnimating) return;
+      isAnimating = true;
+      
+      const startPos = chlorines.map(cl => cl.position.clone());
+      const start = performance.now();
+      const duration = 1000;
+
+      function loop(now) {
+        const t = Math.min((now - start) / duration, 1);
+        // Ease out
+        const ease = 1 - Math.pow(1 - t, 3);
+        
+        chlorines.forEach((cl, i) => {
+          cl.position.copy(getTransformedPos(startPos[i], type, param, ease));
+        });
+        updateBonds();
+
+        if (t < 1) requestAnimationFrame(loop);
+        else isAnimating = false;
+      }
+      requestAnimationFrame(loop);
+    }
+
+    function resetMolecule() {
+      if (isAnimating) return;
+      chlorines.forEach((cl, i) => cl.position.copy(V0[i]));
+      updateBonds();
+    }
+
+    // --- UI Wiring ---
+    const opTypeSelect = document.getElementById("opTypeSelect");
+    const axisSelect = document.getElementById("axisSelect");
+    const applyBtn = document.getElementById("applyBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    
+    const toggleC3 = document.getElementById("toggleC3");
+    const toggleC2S4 = document.getElementById("toggleC2S4");
+    const togglePlanes = document.getElementById("togglePlanes");
+    const toggleBonds = document.getElementById("toggleBonds");
+
+    function updateAxisOptions() {
+      const type = opTypeSelect.value;
+      axisSelect.innerHTML = "";
+      
+      let data = [];
+      if (type === 'C3') data = c3AxesData;
+      else if (type === 'C2' || type === 'S4') data = c2s4AxesData;
+      else if (type === 'sigma') data = sigmaPlanesData;
+      else if (type === 'E') {
+        const opt = document.createElement("option");
+        opt.text = "なし";
+        axisSelect.add(opt);
+        return;
+      }
+
+      data.forEach((d, i) => {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.text = d.name;
+        axisSelect.add(opt);
+      });
+    }
+
+    opTypeSelect.addEventListener("change", updateAxisOptions);
+    updateAxisOptions(); // init
+
+    applyBtn.addEventListener("click", () => {
+      const type = opTypeSelect.value;
+      if (type === 'E') {
+        statusEl.textContent = "恒等操作: 何もしません。";
+        return;
+      }
+      runAnimation(type, Number(axisSelect.value));
+    });
+    
+    resetBtn.addEventListener("click", resetMolecule);
+
+    toggleC3.addEventListener("change", () => c3Group.visible = toggleC3.checked);
+    toggleC2S4.addEventListener("change", () => c2s4Group.visible = toggleC2S4.checked);
+    togglePlanes.addEventListener("change", () => planesGroup.visible = togglePlanes.checked);
+    toggleBonds.addEventListener("change", () => bondsGroup.visible = toggleBonds.checked);
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key.toLowerCase() === "r") resetMolecule();
+    });
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    statusEl.textContent = "操作を選択して「適用」を押してください。";
+
+    function animate() {
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    animate();
+  </script>
+</body>
+</html>
