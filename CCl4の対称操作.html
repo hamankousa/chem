@@ -184,6 +184,46 @@
       return m;
     });
 
+    // Labels for Chlorines
+    function makeLabel(text) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'rgba(0, 0, 0, 0)'; // transparent background
+      ctx.fillRect(0, 0, 64, 64);
+      
+      ctx.font = 'bold 48px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 4;
+      ctx.strokeText(text, 32, 32);
+      ctx.fillText(text, 32, 32);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+      const sprite = new THREE.Sprite(spriteMaterial);
+      sprite.scale.set(0.8, 0.8, 1);
+      return sprite;
+    }
+
+    const labels = chlorines.map((cl, i) => {
+      const label = makeLabel(String(i + 1));
+      scene.add(label);
+      return label;
+    });
+
+    function updateLabels() {
+      chlorines.forEach((cl, i) => {
+        // Position label slightly offset from the atom center towards camera or just above
+        // Simple approach: same position
+        labels[i].position.copy(cl.position);
+      });
+    }
+    updateLabels();
+
     // Bonds (C—Cl)
     const bondsGroup = new THREE.Group();
     scene.add(bondsGroup);
@@ -362,6 +402,7 @@
           cl.position.copy(getTransformedPos(startPos[i], type, param, ease));
         });
         updateBonds();
+        updateLabels();
 
         if (t < 1) requestAnimationFrame(loop);
         else isAnimating = false;
@@ -373,6 +414,7 @@
       if (isAnimating) return;
       chlorines.forEach((cl, i) => cl.position.copy(V0[i]));
       updateBonds();
+      updateLabels();
     }
 
     // --- UI Wiring ---
