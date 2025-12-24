@@ -53,6 +53,31 @@
       padding-top: 8px;
     }
     .warn { margin-top: 8px; font-size: 12px; opacity: 0.9; }
+
+    @media (max-width: 600px) {
+      .hud {
+        width: auto;
+        left: 12px;
+        right: 12px;
+        max-height: 70vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .row {
+        gap: 8px;
+      }
+      select, button {
+        flex: 1 1 auto;
+        min-height: 44px;
+        font-size: 14px;
+      }
+      label {
+        flex: 1 1 45%;
+        min-height: 40px;
+        font-size: 13px;
+        justify-content: flex-start;
+      }
+    }
   </style>
 </head>
 <body>
@@ -87,7 +112,7 @@
     </div>
 
     <div class="note">
-      操作: 左ドラッグ＝回転、右ドラッグ＝平行移動、ホイール＝ズーム。Rキー＝リセット。
+      操作: ドラッグ＝回転、右クリック/2本指＝移動、ホイール/ピンチ＝ズーム
     </div>
     <div class="warn" id="status"></div>
   </div>
